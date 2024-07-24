@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>指紋認証シミュレーター</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        button { margin: 10px; padding: 10px 20px; font-size: 16px; }
+        #fingerprintImage { width: 100px; height: 100px; margin: 20px auto; background-color: #ddd; }
+    </style>
+</head>
+<body>
+    <h1>指紋認証シミュレーター</h1>
+    <div id="fingerprintImage"></div>
+    <button id="registerButton">ユーザー登録</button>
+    <button id="authenticateButton">認証</button>
+    <p id="message"></p>
+
+    <script>
+        const registerButton = document.getElementById('registerButton');
+        const authenticateButton = document.getElementById('authenticateButton');
+        const messageElement = document.getElementById('message');
+        const fingerprintImage = document.getElementById('fingerprintImage');
+
+        // ランダムなバイト配列を生成する関数
+        function generateRandomBuffer(length) {
+            return crypto.getRandomValues(new Uint8Array(length));
+        }
+
+        // Base64 URLエンコードする関数
+        function bufferToBase64URLString(buffer) {
+            return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)))
+                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        // ユーザー登録
+        registerButton.addEventListener('click', async () => {
+            try {
+                const publicKeyCredentialCreationOptions = {
+                    challenge: generateRandomBuffer(32),
+                    rp: {
+                        name: "指紋認証シミュレーター",
+                        id: document.location.hostname
+                    },
+                    user: {
+                        id: generateRandomBuffer(16),
+                        name: "user@example.com",
+                        displayName: "テストユーザー"
+                    },
+                    pubKeyCredParams: [{alg: -7, type: "public-key"}],
+                    authenticatorSelection: {
+                        authenticatorAttachment: "platform",
+                        userVerification: "required"
+                    },
+                    timeout: 60000
+                };
+
+                fingerprintImage.style.backgroundColor = "yellow";
+                messageElement.textContent = "指紋を登録中...";
+
+                const credential = await navigator.credentials.create({
+                    publicKey: publicKeyCredentialCreationOptions
+                });
+
+                // 資格情報をサーバーに送信する代わりに、ローカルストレージに保存
+                localStorage.setItem('credential', JSON.stringify({
+                    id: credential.id,
+                    type: credential.type,
+                    rawId: bufferToBase64URLString(credential.rawId)
+                }));
+
+                messageElement.textContent = "ユーザー登録が完了しました。";
+                fingerprintImage.style.backgroundColor = "green";
+            } catch (error) {
+                messageElement.textContent = "登録に失敗しました: " + error;
+                fingerprintImage.style.backgroundColor = "red";
+            }
+        });
+
+        // 認証
+        authenticateButton.addEventListener('click', async () => {
+            try {
+                const storedCredential = JSON.parse(localStorage.getItem('credential'));
+                if (!storedCredential) {
+                    throw new Error("先にユーザー登録を行ってください。");
+                }
+
+                const publicKeyCredentialRequestOptions = {
+                    challenge: generateRandomBuffer(32),
+                    allowCredentials: [{
+                        id: Uint8Array.from(atob(storedCredential.rawId), c => c.charCodeAt(0)),
+                        type: 'public-key'
+                    }],
+                    timeout: 60000,
+                    userVerification: "required"
+                };
+
+                fingerprintImage.style.backgroundColor = "yellow";
+                messageElement.textContent = "指紋を確認中...";
+
+                const assertion = await navigator.credentials.get({
+                    publicKey: publicKeyCredentialRequestOptions
+                });
+
+                messageElement.textContent = "認証に成功しました！";
+                fingerprintImage.style.backgroundColor = "green";
+            } catch (error) {
+                messageElement.textContent = "認証に失敗しました: " + error;
+                fingerprintImage.style.backgroundColor = "red";
+            }
+        });
+    </script>
+</body>
+</html>
